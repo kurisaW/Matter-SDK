@@ -4,7 +4,9 @@
 
 ## 1.SystemTimeSupport.h
 
-...
+### 概述
+
+该文件提供芯片系统层平台的实现基于RT-Thread滴答计数器的time/clock函数。
 
 ## 2.GenericThreadStackManagerImpl_RTThread.h
 

@@ -10,6 +10,8 @@
 | ------------------------------------------------------------ | -------------- |
 | [api.md](https://github.com/kurisaW/Matter-SDK/docs/api.md)  | API 说明       |
 | [descriptrion.md](https://github.com/kurisaW/Matter-SDK/docs/description.md) | 适配层代码说明 |
-| [introduction.md]()                                          | 详细介绍       |
-| [samples.md]()                                               | 应用示例       |
-| [user-guide.md]()                                            | 用户指南       |
+| [introduction.md](https://github.com/kurisaW/Matter-SDK/blob/main/docs/samples.md) | 详细介绍       |
+| [samples.md](https://github.com/kurisaW/Matter-SDK/blob/main/docs/samples.md) | 应用示例       |
+| [user-guide.md](https://github.com/kurisaW/Matter-SDK/blob/main/docs/user-guide.md) | 用户指南       |
+| [extension.md](https://github.com/kurisaW/Matter-SDK/blob/main/docs/extension.md) | 扩展说明       |
+| [log.md](https://github.com/kurisaW/Matter-SDK/blob/main/docs/log.md) | 开发日志       |
