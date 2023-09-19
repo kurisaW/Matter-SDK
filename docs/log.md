@@ -123,6 +123,7 @@ Limitation:
   - adaptation-layer/src/system/SystemMutex.h
   - adaptation-layer/src/system/system.gni
   - adaptation-layer/src/system/BUILD.gn
+  - adaptation-layer/src/system/tests/TestSystemTimer.cpp
 ```
 
 ## Tips
