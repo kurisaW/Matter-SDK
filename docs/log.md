@@ -109,7 +109,20 @@ Limitation:
 + RT-Thread connect to Matter v1.0.0 SDK.
 
 + List of files modified to the original Matter directory:
+
+/* 2023.9.4 */
   - adaptation-layer/src/system/SystemLayer.h
+
+/* 2023.9.17 */
+  - adaptation-layer/src/platform/BUILD.gn
+  - adaptation-layer/src/platform/device.gni
+
+/* 2023.9.20 */
+  - adaptation-layer/src/system/SystemConfig.h
+  - adaptation-layer/src/system/SystemMutex.cpp
+  - adaptation-layer/src/system/SystemMutex.h
+  - adaptation-layer/src/system/system.gni
+  - adaptation-layer/src/system/BUILD.gn
 ```
 
 ## Tips
