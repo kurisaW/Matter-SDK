@@ -23,7 +23,7 @@ declare_args() {
   # Use BSD/POSIX socket API.
   chip_system_config_use_sockets = current_os != "freertos"
 
-  # Mutex implementation: posix, freertos, none.
+  # Mutex implementation: posix, freertos, rtthread, none.
   chip_system_config_locking = ""
 
   # Clock implementation: clock_gettime, gettimeofday
@@ -57,9 +57,12 @@ if (chip_system_config_locking == "") {
     chip_system_config_locking = "freertos"
   } else if (current_os == "mbed") {
     chip_system_config_locking = "mbed"
-  } else if (chip_system_config_use_dispatch == false) {
+  } else if (current_os == "rtthread") {
+    chip_system_config_locking = "rtthread"
+  }else if (chip_system_config_use_dispatch == false) {
     chip_system_config_locking = "posix"
-  } else {
+  }
+   else {
     chip_system_config_locking = "none"
   }
 }
@@ -68,8 +71,9 @@ assert(
     chip_system_config_locking == "posix" ||
         chip_system_config_locking == "freertos" ||
         chip_system_config_locking == "none" ||
-        chip_system_config_locking == "mbed",
-    "Please select a valid mutex implementation: posix, freertos, mbed, none")
+        chip_system_config_locking == "mbed" ||
+        chip_system_config_locking == "rtthread",
+    "Please select a valid mutex implementation: posix, freertos, mbed, rtthread, none")
 
 assert(
     chip_system_config_clock == "clock_gettime" ||
