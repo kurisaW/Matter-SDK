@@ -1,6 +1,6 @@
 ## List of files removed
 
-```
+```bash
 + Using Matter v1.0.0 SDK.
 
 Limitation:
@@ -74,7 +74,7 @@ Limitation:
 
 ## List of files added
 
-```
+```bash
 + RT-Thread connect to Matter v1.0.0 SDK.
 
 + List of files added to the original Matter directory:
@@ -101,6 +101,11 @@ Limitation:
 + in adaptation-layer/src/system/ directory:
   - adaptation-layer/src/system/SystemLayerImplRTThread.h
   - adaptation-layer/src/system/SystemLayerImplRTThread.cpp
+
+/* 2023.9.22 */
++ in adaptation-layer/src/lwip/ directory:
+  - adaptation-layer/src/lwip/rtthread/sys_arch.c
+  - adaptation-layer/src/lwip/rtthread/sys_arch.h
 ```
 
 ## List of files modified
@@ -124,6 +129,10 @@ Limitation:
   - adaptation-layer/src/system/system.gni
   - adaptation-layer/src/system/BUILD.gn
   - adaptation-layer/src/system/tests/TestSystemTimer.cpp
+
+/* 2023.9.22 */
+  - adaptation-layer/src/lwip/rtthread/BUILD.gn
+  - adaptation-layer/src/lwip/rtthread/lwip.gni
 ```
 
 ## Tips
