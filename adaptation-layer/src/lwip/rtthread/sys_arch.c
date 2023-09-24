@@ -22,184 +22,20 @@
  *
  */
 
-#include <rtthread.h>
-#include <rthw.h>
+#include "arch/sys_arch.h"
+#include <lwip/stats.h>
 
-#include "lwip/sys.h"
-#include "lwip/opt.h"
-#include "lwip/stats.h"
-#include "lwip/err.h"
 #include "arch/sys_arch.h"
 #include "lwip/debug.h"
-#include "lwip/netif.h"
-#include "lwip/tcpip.h"
-#include "netif/ethernetif.h"
-#include "lwip/sio.h"
-#include <lwip/init.h>
-#include "lwip/inet.h"
-
-#include <string.h>
-
-/*
- * Initialize the network interface device
- *
- * @return the operation status, ERR_OK on OK, ERR_IF on error
- */
-static err_t netif_device_init(struct netif *netif)
-{
-    struct eth_device *ethif;
-
-    ethif = (struct eth_device *)netif->state;
-    if (ethif != RT_NULL)
-    {
-        rt_device_t device;
-
-        /* get device object */
-        device = (rt_device_t) ethif;
-        if (rt_device_init(device) != RT_EOK)
-        {
-            return ERR_IF;
-        }
-
-        /* copy device flags to netif flags */
-        netif->flags = ethif->flags;
-
-        return ERR_OK;
-    }
-
-    return ERR_IF;
-}
-/*
- * Initialize the ethernetif layer and set network interface device up
- */
-static void tcpip_init_done_callback(void *arg)
-{
-    rt_device_t device;
-    struct eth_device *ethif;
-    struct ip_addr ipaddr, netmask, gw;
-    struct rt_list_node* node;
-    struct rt_object* object;
-    struct rt_object_information *information;
-
-    LWIP_ASSERT("invalid arg.\n",arg);
-
-    IP4_ADDR(&gw, 0,0,0,0);
-    IP4_ADDR(&ipaddr, 0,0,0,0);
-    IP4_ADDR(&netmask, 0,0,0,0);
-
-    /* enter critical */
-    rt_enter_critical();
-
-    /* for each network interfaces */
-    information = rt_object_get_information(RT_Object_Class_Device);
-    RT_ASSERT(information != RT_NULL);
-    for (node = information->object_list.next;
-         node != &(information->object_list);
-         node = node->next)
-    {
-        object = rt_list_entry(node, struct rt_object, list);
-        device = (rt_device_t)object;
-        if (device->type == RT_Device_Class_NetIf)
-        {
-            ethif = (struct eth_device *)device;
-
-            /* leave critical */
-            rt_exit_critical();
-            LOCK_TCPIP_CORE();
-
-            netif_add(ethif->netif, &ipaddr, &netmask, &gw,
-                      ethif, netif_device_init, tcpip_input);
-
-            if (netif_default == RT_NULL)
-                netif_set_default(ethif->netif);
-
-#if LWIP_DHCP
-            if (ethif->flags & NETIF_FLAG_DHCP)
-            {
-                /* if this interface uses DHCP, start the DHCP client */
-                dhcp_start(ethif->netif);
-            }
-            else
-#endif
-            {
-                /* set interface up */
-                netif_set_up(ethif->netif);
-            }
-
-            if (!(ethif->flags & ETHIF_LINK_PHYUP))
-            {
-                netif_set_link_up(ethif->netif);
-            }
-
-            UNLOCK_TCPIP_CORE();
-            /* enter critical */
-            rt_enter_critical();
-        }
-    }
-
-    /* leave critical */
-    rt_exit_critical();
-    rt_sem_release((rt_sem_t)arg);
-}
-
-/**
- * LwIP system initialization
- */
-int lwip_system_init(void)
-{
-    rt_err_t rc;
-    struct rt_semaphore done_sem;
-
-    /* set default netif to NULL */
-    netif_default = RT_NULL;
-
-    rc = rt_sem_init(&done_sem, "done", 0, RT_IPC_FLAG_FIFO);
-
-    if (rc != RT_EOK)
-    {
-        LWIP_ASSERT("Failed to create semaphore", 0);
-
-        return -1;
-    }
-
-    tcpip_init(tcpip_init_done_callback, (void *)&done_sem);
-
-    /* waiting for initialization done */
-    if (rt_sem_take(&done_sem, RT_WAITING_FOREVER) != RT_EOK)
-    {
-        rt_sem_detach(&done_sem);
-
-        return -1;
-    }
-    rt_sem_detach(&done_sem);
-
-    /* set default ip address */
-#if !LWIP_DHCP
-    if (netif_default != RT_NULL)
-    {
-        struct ip_addr ipaddr, netmask, gw;
-
-        ipaddr.addr = inet_addr(RT_LWIP_IPADDR);
-        gw.addr = inet_addr(RT_LWIP_GWADDR);
-        netmask.addr = inet_addr(RT_LWIP_MSKADDR);
-
-        netifapi_netif_set_addr(netif_default, &ipaddr, &netmask, &gw);
-    }
-#endif
-    rt_kprintf("lwIP-%d.%d.%d initialized!\n", LWIP_VERSION_MAJOR, LWIP_VERSION_MINOR, LWIP_VERSION_REVISION);
-
-    return 0;
-}
-INIT_PREV_EXPORT(lwip_system_init);
+#include "lwip/def.h"
+#include "lwip/mem.h"
+#include "lwip/opt.h"
+#include "lwip/stats.h"
+#include "lwip/sys.h"
 
 void sys_init(void)
 {
-    /* nothing on RT-Thread porting */
-}
-
-void lwip_sys_init(void)
-{
-    lwip_system_init();
+    // Nothing to do here for RT-Thread.
 }
 
 /*
@@ -209,23 +45,16 @@ void lwip_sys_init(void)
  */
 err_t sys_sem_new(sys_sem_t *sem, u8_t count)
 {
-    static unsigned short counter = 0;
-    char tname[RT_NAME_MAX];
-    sys_sem_t tmpsem;
-
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
-    rt_snprintf(tname, RT_NAME_MAX, "%s%d", SYS_LWIP_SEM_NAME, counter);
-    counter ++;
-
-    tmpsem = rt_sem_create(tname, count, RT_IPC_FLAG_FIFO);
-    if (tmpsem == RT_NULL)
-        return ERR_MEM;
+    *sem = rt_sem_create("lwip_sem", count, RT_IPC_FLAG_PRIO);
+    if (*sem != RT_EOK)
+    {
+        SYS_STATS_INC_USED(sem);
+        return ERR_OK;
+    }
     else
     {
-        *sem = tmpsem;
-
-        return ERR_OK;
+        SYS_STATS_INC(sem.err);
+        return ERR_MEM;
     }
 }
 
@@ -234,8 +63,8 @@ err_t sys_sem_new(sys_sem_t *sem, u8_t count)
  */
 void sys_sem_free(sys_sem_t *sem)
 {
-    RT_DEBUG_NOT_IN_INTERRUPT;
     rt_sem_delete(*sem);
+    SYS_STATS_DEC(sem);
 }
 
 /*
@@ -256,16 +85,13 @@ void sys_sem_signal(sys_sem_t *sem)
  */
 u32_t sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
 {
-    rt_err_t ret;
-    s32_t t;
-    u32_t tick;
+    rt_tick_t start_time = rt_tick_get();
+    rt_tick_t timeout_ticks = RT_TICK_PER_SECOND * timeout / 1000;
 
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
-    /* get the begin tick */
-    tick = rt_tick_get();
     if (timeout == 0)
-        t = RT_WAITING_FOREVER;
+    {
+        timeout_ticks = RT_WAITING_FOREVER;
+    }
     else
     {
         /* convert msecond to os tick */
@@ -275,25 +101,24 @@ u32_t sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
             t = timeout / (1000/RT_TICK_PER_SECOND);
     }
 
-    ret = rt_sem_take(*sem, t);
-
-    if (ret == -RT_ETIMEOUT)
+    rt_err_t result = rt_sem_take(*sem, timeout_ticks);
+    if (result == RT_EOK)
+    {
+        u32_t elapsed_time = (rt_tick_get() - start_time) * 1000 / RT_TICK_PER_SECOND;
+        if (elapsed_time == 0)
+        {
+            elapsed_time = 1;
+        }
+        return elapsed_time;
+    }
+    else if (result == -RT_ETIMEOUT)
+    {
         return SYS_ARCH_TIMEOUT;
+    }
     else
     {
-        if (ret == RT_EOK)
-            ret = 1;
+        return SYS_ARCH_TIMEOUT;
     }
-
-    /* get elapse msecond */
-    tick = rt_tick_get() - tick;
-
-    /* convert tick to msecond */
-    tick = tick * (1000 / RT_TICK_PER_SECOND);
-    if (tick == 0)
-        tick = 1;
-
-    return tick;
 }
 
 #ifndef sys_sem_valid
@@ -315,7 +140,6 @@ void sys_sem_set_invalid(sys_sem_t *sem)
 }
 #endif
 
-/* ====================== Mutex ====================== */
 
 /** Create a new mutex
  * @param mutex pointer to the mutex to create
@@ -323,24 +147,26 @@ void sys_sem_set_invalid(sys_sem_t *sem)
  */
 err_t sys_mutex_new(sys_mutex_t *mutex)
 {
-    static unsigned short counter = 0;
-    char tname[RT_NAME_MAX];
-    sys_mutex_t tmpmutex;
-
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
-    rt_snprintf(tname, RT_NAME_MAX, "%s%d", SYS_LWIP_MUTEX_NAME, counter);
-    counter ++;
-
-    tmpmutex = rt_mutex_create(tname, RT_IPC_FLAG_PRIO);
-    if (tmpmutex == RT_NULL)
-        return ERR_MEM;
-    else
+    *mutex = rt_mutex_create("lwip_mutex", RT_IPC_FLAG_PRIO);
+    if (*mutex != RT_NULL)
     {
-        *mutex = tmpmutex;
-
+        SYS_STATS_INC_USED(mutex);
         return ERR_OK;
     }
+    else
+    {
+        SYS_STATS_INC(mutex.err);
+        return ERR_MEM;
+    }
+}
+
+/** Delete a semaphore
+ * @param mutex the mutex to delete
+ */
+void sys_mutex_free(sys_mutex_t *mutex)
+{
+    rt_mutex_delete(*mutex);
+    SYS_STATS_DEC(mutex);
 }
 
 /** Lock a mutex
@@ -348,10 +174,7 @@ err_t sys_mutex_new(sys_mutex_t *mutex)
  */
 void sys_mutex_lock(sys_mutex_t *mutex)
 {
-    RT_DEBUG_NOT_IN_INTERRUPT;
     rt_mutex_take(*mutex, RT_WAITING_FOREVER);
-
-    return;
 }
 
 /** Unlock a mutex
@@ -362,17 +185,7 @@ void sys_mutex_unlock(sys_mutex_t *mutex)
     rt_mutex_release(*mutex);
 }
 
-/** Delete a semaphore
- * @param mutex the mutex to delete
- */
-void sys_mutex_free(sys_mutex_t *mutex)
-{
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
-    rt_mutex_delete(*mutex);
-}
-
-#ifndef sys_mutex_valid
+#ifndef sys_mutex_valid 
 /** Check if a mutex is valid/allocated:
  *  return 1 for valid, 0 for invalid
  */
@@ -391,8 +204,6 @@ void sys_mutex_set_invalid(sys_mutex_t *mutex)
 }
 #endif
 
-/* ====================== Mailbox ====================== */
-
 /*
  * Create an empty mailbox for maximum "size" elements
  *
@@ -400,24 +211,17 @@ void sys_mutex_set_invalid(sys_mutex_t *mutex)
  */
 err_t sys_mbox_new(sys_mbox_t *mbox, int size)
 {
-    static unsigned short counter = 0;
-    char tname[RT_NAME_MAX];
-    sys_mbox_t tmpmbox;
-
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
-    rt_snprintf(tname, RT_NAME_MAX, "%s%d", SYS_LWIP_MBOX_NAME, counter);
-    counter ++;
-
-    tmpmbox = rt_mb_create(tname, size, RT_IPC_FLAG_FIFO);
-    if (tmpmbox != RT_NULL)
+    *mbox = rt_mb_create("lwip_mbox", size, RT_IPC_FLAG_FIFO);
+    if (*mbox != NULL)
     {
-        *mbox = tmpmbox;
-
+        SYS_STATS_INC_USED(mbox);
         return ERR_OK;
     }
-
-    return ERR_MEM;
+    else
+    {
+        SYS_STATS_INC(mbox.err);
+        return ERR_MEM;
+    }
 }
 
 /*
@@ -425,38 +229,17 @@ err_t sys_mbox_new(sys_mbox_t *mbox, int size)
  */
 void sys_mbox_free(sys_mbox_t *mbox)
 {
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
     rt_mb_delete(*mbox);
-
-    return;
 }
 
 /** Post a message to an mbox - may not fail
  * -> blocks if full, only used from tasks not from ISR
  * @param mbox mbox to posts the message
  * @param msg message to post (ATTENTION: can be NULL)
- */
+ */ 
 void sys_mbox_post(sys_mbox_t *mbox, void *msg)
 {
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
     rt_mb_send_wait(*mbox, (rt_uint32_t)msg, RT_WAITING_FOREVER);
-
-    return;
-}
-
-/*
- * Try to post the "msg" to the mailbox
- *
- * @return return ERR_OK if the "msg" is posted, ERR_MEM if the mailbox is full
- */
-err_t sys_mbox_trypost(sys_mbox_t *mbox, void *msg)
-{
-    if (rt_mb_send(*mbox, (rt_uint32_t)msg) == RT_EOK)
-        return ERR_OK;
-
-    return ERR_MEM;
 }
 
 /** Wait for a new message to arrive in the mbox
@@ -469,41 +252,34 @@ err_t sys_mbox_trypost(sys_mbox_t *mbox, void *msg)
  */
 u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
 {
-    rt_err_t ret;
-    s32_t t;
-    u32_t tick;
+    rt_tick_t start_time = rt_tick_get();
+    rt_tick_t timeout_ticks = RT_TICK_PER_SECOND * timeout / 1000;
 
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
-    /* get the begin tick */
-    tick = rt_tick_get();
-
-    if(timeout == 0)
-        t = RT_WAITING_FOREVER;
-    else
+    if (msg == NULL)
     {
-        /* convirt msecond to os tick */
-        if (timeout < (1000/RT_TICK_PER_SECOND))
-            t = 1;
-        else
-            t = timeout / (1000/RT_TICK_PER_SECOND);
+        msg = (void **)rt_malloc(sizeof(void *));
     }
 
-    ret = rt_mb_recv(*mbox, (rt_ubase_t *)msg, t);
-    if(ret != RT_EOK)
+    rt_err_t result = rt_mb_recv(*mbox, (rt_ubase_t *)msg, timeout_ticks);
+    if (result == RT_EOK)
     {
+        u32_t elapsed_time = (rt_tick_get() - start_time) * 1000 / RT_TICK_PER_SECOND;
+        if (elapsed_time == 0)
+        {
+            elapsed_time = 1;
+        }
+        return elapsed_time;
+    }
+    else if (result == -RT_ETIMEOUT)
+    {
+        *msg = NULL;
         return SYS_ARCH_TIMEOUT;
     }
-
-    /* get elapse msecond */
-    tick = rt_tick_get() - tick;
-
-    /* convert tick to msecond */
-    tick = tick * (1000 / RT_TICK_PER_SECOND);
-    if (tick == 0)
-        tick = 1;
-
-    return tick;
+    else
+    {
+        *msg = NULL;
+        return SYS_ARCH_TIMEOUT;
+    }
 }
 
 /** Wait for a new message to arrive in the mbox
@@ -515,20 +291,27 @@ u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
  */
 u32_t sys_arch_mbox_tryfetch(sys_mbox_t *mbox, void **msg)
 {
-    int ret;
+    rt_err_t result = rt_mb_recv(*mbox, (rt_ubase_t *)msg, 0);
+    return (result == RT_EOK) ? 0 : SYS_MBOX_EMPTY;
+}
 
-    ret = rt_mb_recv(*mbox, (rt_ubase_t *)msg, 0);
-    if(ret == -RT_ETIMEOUT)
+/*
+ * Try to post the "msg" to the mailbox
+ *
+ * @return return ERR_OK if the "msg" is posted, ERR_MEM if the mailbox is full
+ */
+err_t sys_mbox_trypost(sys_mbox_t *mbox, void *msg)
+{
+    rt_err_t result = rt_mb_send(*mbox, (rt_uint32_t)msg);
+    if (result == RT_EOK)
     {
-        return SYS_ARCH_TIMEOUT;
+        return ERR_OK;
     }
     else
     {
-        if (ret == RT_EOK)
-            ret = 1;
+        SYS_STATS_INC(mbox.err);
+        return ERR_MEM;
     }
-
-    return ret;
 }
 
 #ifndef sys_mbox_valid
@@ -550,61 +333,27 @@ void sys_mbox_set_invalid(sys_mbox_t *mbox)
 }
 #endif
 
-/* ====================== System ====================== */
-
 /*
  * Start a new thread named "name" with priority "prio" that will begin
  * its execution in the function "thread()". The "arg" argument will be
  * passed as an argument to the thread() function
  */
-sys_thread_t sys_thread_new(const char    *name,
-                            lwip_thread_fn thread,
-                            void          *arg,
-                            int            stacksize,
-                            int            prio)
+sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread, void *arg, int stacksize, int prio)
 {
-    rt_thread_t t;
-
-    RT_DEBUG_NOT_IN_INTERRUPT;
-
-    /* create thread */
-    t = rt_thread_create(name, thread, arg, stacksize, prio, 20);
-    RT_ASSERT(t != RT_NULL);
-
-    /* startup thread */
-    rt_thread_startup(t);
-
-    return t;
+    rt_thread_t thread_id;
+    thread_id = rt_thread_create(name, thread, arg, stacksize, prio, 20);
+    if (thread_id != RT_NULL)
+    {
+        rt_thread_startup(thread_id);
+    }
+    return thread_id;
 }
 
-sys_prot_t sys_arch_protect(void)
+err_t sys_thread_finish(sys_thread_t t)
 {
-    rt_base_t level;
-
-    /* disable interrupt */
-    level = rt_hw_interrupt_disable();
-
-    return level;
-}
-
-void sys_arch_unprotect(sys_prot_t pval)
-{
-    /* enable interrupt */
-    rt_hw_interrupt_enable(pval);
-
-    return;
-}
-
-void sys_arch_assert(const char *file, int line)
-{
-    rt_kprintf("\nAssertion: %d in %s, thread %s\n",
-               line, file, rt_thread_self()->name);
-    RT_ASSERT(0);
-}
-
-u32_t sys_jiffies(void)
-{
-    return rt_tick_get();
+    rt_thread_t thread_id = (rt_thread_t)t;
+    rt_thread_delete(thread_id);
+    return ERR_OK;
 }
 
 u32_t sys_now(void)
@@ -612,111 +361,16 @@ u32_t sys_now(void)
     return rt_tick_get_millisecond();
 }
 
-#ifdef RT_LWIP_PPP
-u32_t sio_read(sio_fd_t fd, u8_t *buf, u32_t size)
+sys_prot_t sys_arch_protect(void)
 {
-    u32_t len;
-
-    RT_ASSERT(fd != RT_NULL);
-
-    len = rt_device_read((rt_device_t)fd, 0, buf, size);
-    if (len <= 0)
-        return 0;
-
-    return len;
+    sys_prot_t state;
+    rt_base_t level;
+    level = rt_hw_interrupt_disable();
+    state = level;
+    return state;
 }
 
-u32_t sio_write(sio_fd_t fd, u8_t *buf, u32_t size)
+void sys_arch_unprotect(sys_prot_t pval)
 {
-    RT_ASSERT(fd != RT_NULL);
-
-    return rt_device_write((rt_device_t)fd, 0, buf, size);
+    rt_hw_interrupt_enable(pval);
 }
-
-void sio_read_abort(sio_fd_t fd)
-{
-    rt_kprintf("read_abort\n");
-}
-
-void ppp_trace(int level, const char *format, ...)
-{
-    va_list args;
-    rt_size_t length;
-    static char rt_log_buf[RT_CONSOLEBUF_SIZE];
-
-    va_start(args, format);
-    length = rt_vsprintf(rt_log_buf, format, args);
-    rt_device_write((rt_device_t)rt_console_get_device(), 0, rt_log_buf, length);
-    va_end(args);
-}
-#endif
-
-/*
- * export bsd socket symbol for RT-Thread Application Module
- */
-#if LWIP_SOCKET
-#include <lwip/sockets.h>
-RTM_EXPORT(lwip_accept);
-RTM_EXPORT(lwip_bind);
-RTM_EXPORT(lwip_shutdown);
-RTM_EXPORT(lwip_getpeername);
-RTM_EXPORT(lwip_getsockname);
-RTM_EXPORT(lwip_getsockopt);
-RTM_EXPORT(lwip_setsockopt);
-RTM_EXPORT(lwip_close);
-RTM_EXPORT(lwip_connect);
-RTM_EXPORT(lwip_listen);
-RTM_EXPORT(lwip_recv);
-RTM_EXPORT(lwip_read);
-RTM_EXPORT(lwip_recvfrom);
-RTM_EXPORT(lwip_send);
-RTM_EXPORT(lwip_sendto);
-RTM_EXPORT(lwip_socket);
-RTM_EXPORT(lwip_write);
-RTM_EXPORT(lwip_select);
-RTM_EXPORT(lwip_ioctl);
-RTM_EXPORT(lwip_fcntl);
-
-RTM_EXPORT(lwip_htons);
-RTM_EXPORT(lwip_ntohs);
-RTM_EXPORT(lwip_htonl);
-RTM_EXPORT(lwip_ntohl);
-
-RTM_EXPORT(ipaddr_aton);
-RTM_EXPORT(ipaddr_ntoa);
-
-#if LWIP_DNS
-#include <lwip/netdb.h>
-RTM_EXPORT(lwip_gethostbyname);
-RTM_EXPORT(lwip_gethostbyname_r);
-RTM_EXPORT(lwip_freeaddrinfo);
-RTM_EXPORT(lwip_getaddrinfo);
-#endif
-
-#endif
-
-#if LWIP_DHCP
-#include <lwip/dhcp.h>
-RTM_EXPORT(dhcp_start);
-RTM_EXPORT(dhcp_renew);
-RTM_EXPORT(dhcp_stop);
-#endif
-
-#if LWIP_NETIF_API
-#include <lwip/netifapi.h>
-RTM_EXPORT(netifapi_netif_set_addr);
-#endif
-
-#if LWIP_NETIF_LINK_CALLBACK
-RTM_EXPORT(netif_set_link_callback);
-#endif
-
-#if LWIP_NETIF_STATUS_CALLBACK
-RTM_EXPORT(netif_set_status_callback);
-#endif
-
-RTM_EXPORT(netif_find);
-RTM_EXPORT(netif_set_addr);
-RTM_EXPORT(netif_set_ipaddr);
-RTM_EXPORT(netif_set_gw);
-RTM_EXPORT(netif_set_netmask);

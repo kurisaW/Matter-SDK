@@ -133,6 +133,12 @@ Limitation:
 /* 2023.9.22 */
   - adaptation-layer/src/lwip/rtthread/BUILD.gn
   - adaptation-layer/src/lwip/rtthread/lwip.gni
+
+/* 2023.9.23 */
++ in adaptation-layer/src/lwip/ directory:
+  - adaptation-layer/src/lwip/rtthread/sys_arch.c
+  - adaptation-layer/src/lwip/rtthread/sys_arch.h
+  - adaptation-layer/src/lwip/rtthread/BUILD.gn
 ```
 
 ## Tips

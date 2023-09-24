@@ -24,23 +24,31 @@
 #ifndef CHIP_LWIP_RTTHREAD_ARCH_SYS_ARCH_H
 #define CHIP_LWIP_RTTHREAD_ARCH_SYS_ARCH_H
 
-#include "arch/cc.h"
 #include <rtthread.h>
+#include <lwip/opt.h>
+#include <lwip/sys.h>
 
 #define SYS_MBOX_NULL RT_NULL
 #define SYS_SEM_NULL  RT_NULL
 
 typedef rt_uint32_t sys_prot_t;
 
-#define SYS_MBOX_SIZE 10
-#define SYS_LWIP_TIMER_NAME "timer"
-#define SYS_LWIP_MBOX_NAME "mbox"
-#define SYS_LWIP_SEM_NAME "sem"
-#define SYS_LWIP_MUTEX_NAME "mu"
-
-typedef rt_sem_t sys_sem_t;
 typedef rt_mutex_t sys_mutex_t;
-typedef rt_mailbox_t  sys_mbox_t;
+typedef rt_sem_t sys_sem_t;
+typedef rt_mailbox_t sys_mbox_t;
 typedef rt_thread_t sys_thread_t;
+
+#ifdef LWIP_DEBUG
+#define LWIP_PLATFORM_DIAG(x) rt_kprintf x
+#define LWIP_ERROR(message, expression, handler)       \
+    do                                                 \
+    {                                                  \
+        if (!(expression))                            \
+        {                                              \
+            LWIP_PLATFORM_DIAG((message));             \
+            handler;                                   \
+        }                                              \
+    } while (0)
+#endif
 
 #endif /* CHIP_LWIP_RTTHREAD_ARCH_SYS_ARCH_H */
