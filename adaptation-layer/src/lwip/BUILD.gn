@@ -176,10 +176,8 @@ if (current_os == "zephyr" || current_os == "mbed") {
       sources += [ "standalone/sys_arch.c" ]
     } else if (lwip_platform == "cyw30739") {
     } else if (lwip_platform == "mt793x") {
-    } else if(lwip_platform == "rtthread"){
-      public += [
-        "rtthread/arch/sys_arch.h",
-      ]
+    } else if(lwip_platform == "rtthread" && lwip_platform != freertos){
+      public += [ "rtthread/arch/sys_arch.h" ]
       sources += [ "rtthread/sys_arch.c" ]
     } else {
       public += [
